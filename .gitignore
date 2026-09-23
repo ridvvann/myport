@@ -1,0 +1,27 @@
+# 1. Add proper ignores
+cat > .gitignore << 'EOF'
+node_modules/
+.env
+dist/
+.DS_Store
+EOF
+
+cat > client/.gitignore << 'EOF'
+node_modules/
+dist/
+.env
+EOF
+
+cat > server/.gitignore << 'EOF'
+node_modules/
+.env
+EOF
+
+# 2. Untrack node_modules and .env from git (keeps them on disk, just stops tracking)
+git rm -r --cached client/node_modules server/node_modules
+git rm --cached server/.env 2>/dev/null
+
+# 3. Commit and push
+git add .gitignore client/.gitignore server/.gitignore
+git commit -m "Stop tracking node_modules and .env; add proper .gitignore"
+git push origin main
