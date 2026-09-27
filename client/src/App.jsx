@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import Nav from "./components/Nav.jsx";
 import Footer from "./components/Footer.jsx";
 import SiteDecor from "./components/SiteDecor.jsx";
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/admin" element={<Admin />} />
         </Routes>
       </main>
+      <Analytics />
       <Footer />
     </>
   );
