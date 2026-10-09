@@ -51,15 +51,16 @@ const services = [
 
 export default function Services() {
   return (
-    <section className="section" id="services">
+    <section className="section screen" id="services" data-screen="Services">
       <div className="container">
         <div className="section-head section-head-center">
-          <p className="mono-label">what i do</p>
-          <h2>Services</h2>
+          <p className="mono-label" data-r="up">what i do</p>
+          <h2 data-r="blur" style={{ "--i": 1 }}>Services</h2>
         </div>
         <div className="discipline-grid">
-          {services.map((d) => (
-            <div className="discipline" key={d.n}>
+          {services.map((d, i) => (
+            <div className="d-wrap" key={d.n} data-r={i % 2 ? "right" : "left"} style={{ "--i": i + 2 }}>
+            <div className="discipline">
               <div className="discipline-top">
                 <span className="discipline-icon">{d.icon}</span>
                 <span className="discipline-index">{d.n}</span>
@@ -68,6 +69,7 @@ export default function Services() {
                 <h3>{d.title}</h3>
                 <p>{d.body}</p>
               </div>
+            </div>
             </div>
           ))}
         </div>

@@ -1,5 +1,18 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://myport-vnrv.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL || "https://myportfolio-suqv.onrender.com";
 const TOKEN_KEY = "saki-admin-token";
+
+// fetch() throws a bare "Failed to fetch" when the browser can't get an
+// answer at all (server asleep/down, wrong URL, or blocked by CORS). Turn
+// that into something that says what to check.
+async function safeFetch(url, options) {
+  try {
+    return await fetch(url, options);
+  } catch {
+    throw new Error(
+      "Can't reach the server. If it's been idle it may still be waking up — wait a minute and try again."
+    );
+  }
+}
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -12,7 +25,7 @@ export function clearToken() {
 }
 
 export async function login(password) {
-  const res = await fetch(`${API_URL}/api/admin/login`, {
+  const res = await safeFetch(`${API_URL}/api/admin/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password }),
@@ -33,7 +46,7 @@ function authHeaders() {
 export async function uploadMedia(file) {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(`${API_URL}/api/admin/upload`, {
+  const res = await safeFetch(`${API_URL}/api/admin/upload`, {
     method: "POST",
     headers: authHeaders(),
     body: formData,
@@ -50,7 +63,7 @@ export async function uploadMedia(file) {
 export async function uploadMultipleMedia(files) {
   const formData = new FormData();
   for (const file of files) formData.append("files", file);
-  const res = await fetch(`${API_URL}/api/admin/upload-multiple`, {
+  const res = await safeFetch(`${API_URL}/api/admin/upload-multiple`, {
     method: "POST",
     headers: authHeaders(),
     body: formData,
@@ -63,7 +76,7 @@ export async function uploadMultipleMedia(files) {
 }
 
 export async function createProject(project) {
-  const res = await fetch(`${API_URL}/api/admin/projects`, {
+  const res = await safeFetch(`${API_URL}/api/admin/projects`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(project),
@@ -76,7 +89,7 @@ export async function createProject(project) {
 }
 
 export async function deleteProject(id) {
-  const res = await fetch(`${API_URL}/api/admin/projects/${id}`, {
+  const res = await safeFetch(`${API_URL}/api/admin/projects/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -88,7 +101,7 @@ export async function deleteProject(id) {
 }
 
 export async function listProjects() {
-  const res = await fetch(`${API_URL}/api/projects`);
+  const res = await safeFetch(`${API_URL}/api/projects`);
   if (!res.ok) throw new Error("Couldn't load projects");
   return res.json();
 }

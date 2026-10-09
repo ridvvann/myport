@@ -38,7 +38,9 @@ export default function Nav() {
           <nav className="nav-links" aria-label="Section navigation">
             <a href="/#about">About</a>
             <a href="/#services">Services</a>
-            <a href="/#work">Work</a>
+            <a href="/#work">Design</a>
+            <a href="/#dev-work">Dev</a>
+            <a href="/#video">Video</a>
             <Link to="/plans">Plans</Link>
             <Link to="/experience">Experience</Link>
           </nav>
@@ -72,7 +74,9 @@ export default function Nav() {
         <nav className="nav-mobile-links" aria-label="Mobile navigation" onClick={close}>
           <a href="/#about">About</a>
           <a href="/#services">Services</a>
-          <a href="/#work">Work</a>
+          <a href="/#work">Design</a>
+            <a href="/#dev-work">Dev</a>
+            <a href="/#video">Video</a>
           <Link to="/plans">Plans</Link>
           <Link to="/experience">Experience</Link>
           <a className="nav-mobile-cta" href="/Saki-Abdikani-Resume.pdf" download>

@@ -1,116 +1,197 @@
-import { useEffect, useRef, useState } from "react";
-import { fetchProjects } from "../api.js";
-import { fallbackProjects, tiktokHandle } from "../data/projects.js";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getMediaKind, getMediaLabel } from "../lib/media.js";
 import { getProjectTheme } from "../lib/color.js";
-import { useAutoplayInView } from "../lib/useAutoplayInView.js";
 
 const CATEGORY_LABEL = {
   marketing: "Marketing", development: "Development", ai: "AI",
   brand: "Brand", event: "Event", graphic: "Graphic design", video: "Video",
 };
 
-export default function Work() {
-  const [projects, setProjects] = useState(fallbackProjects);
-  const [activeTab, setActiveTab] = useState("all");
+// Development / AI work lives in the "Dev work" section (coming soon), and
+// video is the TikTok embed, so neither is pooled into the design gallery.
+const NON_DESIGN = new Set(["development", "ai", "video"]);
+const ROWS = 4;
 
-  useEffect(() => {
-    fetchProjects()
-      .then((data) => { if (data?.length) setProjects(data); })
-      .catch(() => { /* keep fallback data */ });
-  }, []);
-
-  // Only "event" work is ever pooled into a collective gallery — every
-  // other category (including graphic design) sits in one shared,
-  // borderless bento gallery. Video keeps its own static embed box.
-  const eventItems = projects.filter((p) => p.category === "event");
-  const galleryItems = projects.filter((p) => p.category !== "event" && p.category !== "video");
-
-  // Tabs are built from whatever categories actually have work in them,
-  // in the same order as CATEGORY_LABEL, so an empty category never
-  // shows up as a dead tab. Video is a standing tab since that box is
-  // static content, not data-driven.
-  const galleryCategories = Object.keys(CATEGORY_LABEL).filter(
-    (c) => c !== "event" && c !== "video" && galleryItems.some((p) => p.category === c)
+export default function Work({ projects = [] }) {
+  // Every design image from every project, flattened into one pool.
+  // Each tile remembers the project it came from so a tap can open that
+  // project's full set in the lightbox.
+  const pool = useMemo(
+    () =>
+      projects
+        .filter((p) => !NON_DESIGN.has(p.category))
+        .flatMap((p) => {
+          const urls = (p.media_urls?.length ? p.media_urls : [p.media_url]).filter(Boolean);
+          return urls
+            .filter((url) => getMediaKind(url) === "image")
+            .map((url) => ({ url, project: p }));
+        }),
+    [projects]
   );
-  const tabs = [
-    { key: "all", label: "All" },
-    ...galleryCategories.map((c) => ({ key: c, label: CATEGORY_LABEL[c] })),
-    ...(eventItems.length > 0 ? [{ key: "event", label: "Event" }] : []),
-    { key: "video", label: "Video" },
-  ];
-
-  // Reset to "All" if the active tab's category disappears (e.g. data refetch).
-  useEffect(() => {
-    if (activeTab !== "all" && !tabs.some((t) => t.key === activeTab)) setActiveTab("all");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projects]);
-
-  // A tab only ever surfaces work that actually belongs to it — "all"
-  // is the single exception that shows every section together.
-  const shownGallery = activeTab === "all" ? galleryItems : galleryItems.filter((p) => p.category === activeTab);
-  const showEvents = activeTab === "all" || activeTab === "event";
-  const showVideo = activeTab === "all" || activeTab === "video";
 
   return (
-    <section className="section" id="work" style={{ borderBottom: "none" }}>
+    <section className="screen work-screen" id="work" data-screen="Design">
       <div className="container">
         <div className="section-head section-head-center">
-          <p className="mono-label">selected work</p>
-          <h2>My work</h2>
+          <p className="mono-label" data-r="up">design work</p>
+          <h2 data-r="blur" style={{ "--i": 1 }}>Design gallery</h2>
+          <p data-r="up" style={{ "--i": 2 }}>Posters, brands, events and more — hover to pause, tap any piece to open the full project.</p>
         </div>
       </div>
 
-      {tabs.length > 2 && (
-        <div className="work-tabs" role="tablist" aria-label="Filter work by category">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === t.key}
-              className={`work-tab${activeTab === t.key ? " work-tab-active" : ""}`}
-              onClick={() => setActiveTab(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="container">
-        {shownGallery.length === 0 && !(showEvents && eventItems.length > 0) && !showVideo ? (
+      {pool.length === 0 ? (
+        <div className="container">
           <p className="work-empty">Nothing here yet — check back soon.</p>
-        ) : (
-          <div className="work-feed">
-            {shownGallery.length > 0 && <BentoGallery items={shownGallery} />}
-            {showEvents && eventItems.length > 0 && <EventsBox items={eventItems} />}
-            {showVideo && <VideoBox />}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <DesignMarquee pool={pool} />
+      )}
     </section>
   );
 }
 
-/* ---------- A media preview that works for any file type: image and
-   video render inline; anything else (pptx, pdf, docx, zip, ai...)
-   renders as a labelled "open file" tile that links out to it. ---------- */
+/* ---------- Four self-moving rows. Row 1 drifts right→left, row 2
+   left→right, and so on. Tiles share a row height but keep their own
+   natural width, so every design is shown whole (never cropped) and the
+   mix of portrait / landscape pieces gives the bento rhythm. The track is
+   rendered twice and slid by exactly half its width, which makes the loop
+   seamless. ---------- */
+function DesignMarquee({ pool }) {
+  const [active, setActive] = useState(null); // project shown in lightbox
+  const [settled, setSettled] = useState(0);  // images finished (loaded or failed)
+
+  // Round-robin the pool across the rows so each row gets a varied mix.
+  const base = useMemo(() => {
+    const buckets = Array.from({ length: ROWS }, () => []);
+    pool.forEach((item, i) => buckets[i % ROWS].push(item));
+    // A row left empty (fewer images than rows) borrows from the pool.
+    return buckets.map((b, r) => (b.length ? b : [pool[r % pool.length]]));
+  }, [pool]);
+
+  // How many times each row repeats its images. Starts as a guess, then is
+  // raised once real widths are known so a row can never run out of images
+  // before the screen's right edge.
+  const [mult, setMult] = useState(() => base.map((b) => Math.max(1, Math.ceil(7 / b.length))));
+  useEffect(() => { setMult(base.map((b) => Math.max(1, Math.ceil(7 / b.length)))); }, [base]);
+  const rows = useMemo(
+    () => base.map((b, r) => Array.from({ length: mult[r] || 1 }, () => b).flat()),
+    [base, mult]
+  );
+
+  const total = rows.reduce((n, r) => n + r.length * 2, 0);
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setTimedOut(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
+  // Hold the animation until sizes are known (or 4s passes), otherwise
+  // tiles growing as their images arrive would make the loop jump. Once
+  // released it stays released.
+  const [latched, setLatched] = useState(false);
+  const allSettled = settled >= total;
+  useEffect(() => { if (allSettled || timedOut) setLatched(true); }, [allSettled, timedOut]);
+  const ready = latched;
+  const onSettle = () => setSettled((n) => n + 1);
+
+  const trackRefs = useRef([]);
+  useEffect(() => {
+    if (!allSettled && !timedOut) return;
+    const fit = () => {
+      const vw = window.innerWidth;
+      let grow = null;
+      trackRefs.current.forEach((el, r) => {
+        const group = el?.firstElementChild;
+        if (!group) return;
+        const w = group.scrollWidth;
+        if (w > 0 && w < vw * 1.25) {
+          grow = grow || mult.slice();
+          grow[r] = Math.ceil((mult[r] * vw * 1.25) / w);
+        }
+      });
+      if (grow) { setMult(grow); return; }
+      // Widths are known and sufficient: pick each row's duration so every
+      // row drifts at a steady, slightly different pace.
+      trackRefs.current.forEach((el, r) => {
+        if (!el) return;
+        el.style.setProperty("--dur", `${Math.max(20, el.scrollWidth / 2 / ROW_SPEEDS[r])}s`);
+      });
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [allSettled, timedOut, mult, rows]);
+
+  return (
+    <>
+      <div className={`marquee${ready ? " marquee-ready" : ""}`} aria-label="Design gallery" data-r="wipe">
+        {rows.map((items, r) => (
+          <div className="marquee-row" key={r}>
+            <div
+              ref={(el) => { trackRefs.current[r] = el; }}
+              className={`marquee-track ${r % 2 === 0 ? "marquee-left" : "marquee-right"}`}
+            >
+              {[0, 1].map((copy) => (
+                <div className="marquee-group" key={copy} aria-hidden={copy === 1}>
+                  {items.map((item, i) => (
+                    <MarqueeTile
+                      key={`${item.url}-${i}`}
+                      item={item}
+                      focusable={copy === 0}
+                      onSettle={onSettle}
+                      onOpen={() => setActive(item.project)}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {active && <ProjectLightbox project={active} onClose={() => setActive(null)} />}
+    </>
+  );
+}
+
+// Drift speed per row, in px/second.
+const ROW_SPEEDS = [38, 30, 42, 34];
+
+function MarqueeTile({ item, onOpen, onSettle, focusable }) {
+  const [state, setState] = useState("loading"); // loading | loaded | error
+  const settle = (s) => { setState(s); onSettle(); };
+
+  return (
+    <figure
+      className={`marquee-item marquee-item-${state}`}
+      onClick={onOpen}
+      role="button"
+      tabIndex={focusable ? 0 : -1}
+      onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
+    >
+      <img
+        src={item.url}
+        alt={focusable ? item.project.title : ""}
+        decoding="async"
+        draggable="false"
+        onLoad={() => settle("loaded")}
+        onError={() => settle("error")}
+      />
+      <figcaption className="bento-caption">
+        <span className="bento-caption-cat">{CATEGORY_LABEL[item.project.category] || item.project.category}</span>
+        <strong>{item.project.title}</strong>
+      </figcaption>
+    </figure>
+  );
+}
+
+/* ---------- MediaPreview: image / video inline, other file types as an
+   "open file" tile. Used by the lightbox. ---------- */
 function MediaPreview({ url, title }) {
   const kind = getMediaKind(url);
-  const videoRef = useRef(null);
-  // Called unconditionally (rules of hooks) — the ref only ever attaches
-  // to the <video> branch below, so this is a no-op for images/files.
-  useAutoplayInView(videoRef);
-
   if (!url) {
     return <span className="work-box-fallback" aria-hidden="true">{title.charAt(0)}</span>;
   }
-  if (kind === "image") return <FadeImg src={url} alt="" />;
-  if (kind === "video") {
-    return <video ref={videoRef} src={url} muted loop playsInline preload="metadata" />;
-  }
-
+  if (kind === "image") return <img src={url} alt="" loading="lazy" decoding="async" />;
+  if (kind === "video") return <video src={url} muted loop playsInline autoPlay preload="metadata" />;
   return (
     <a className="file-tile" href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
       <span className="file-tile-icon" aria-hidden="true">{getMediaLabel(url)}</span>
@@ -135,45 +216,6 @@ function useProjectTheme(urls) {
   }, [key]);
 
   return theme;
-}
-
-/* ---------- Open, borderless gallery for every category except events
-   and video. One bento cell per project — no card border, no dark
-   pitch-box treatment, just the image with a small caption on hover —
-   laid out in a varied bento grid instead of a uniform grid. Tapping a
-   cell opens that project's full gallery. ---------- */
-function BentoGallery({ items }) {
-  return (
-    <div className="bento-grid">
-      {items.map((p, i) => <BentoItem key={p.id} project={p} index={i} />)}
-    </div>
-  );
-}
-
-function BentoItem({ project, index }) {
-  const [open, setOpen] = useState(false);
-  const gallery = (project.media_urls || []).filter(Boolean);
-  const cover = project.media_url || gallery[0];
-
-  return (
-    <>
-      <figure
-        className="bento-item"
-        style={{ animationDelay: `${index * 40}ms` }}
-        onClick={() => setOpen(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === "Enter") setOpen(true); }}
-      >
-        <MediaPreview url={cover} title={project.title} />
-        <figcaption className="bento-caption">
-          <span className="bento-caption-cat">{CATEGORY_LABEL[project.category] || project.category}</span>
-          <strong>{project.title}</strong>
-        </figcaption>
-      </figure>
-      {open && <ProjectLightbox project={project} onClose={() => setOpen(false)} />}
-    </>
-  );
 }
 
 /* ---------- Case-study lightbox: every file belonging to a project,
@@ -216,132 +258,6 @@ function ProjectLightbox({ project, onClose }) {
               <MediaPreview url={url} title={project.title} />
             </div>
           ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Events: the one category allowed a collective gallery —
-   every photo from every event project pooled into a single open,
-   borderless bento wall. Tapping any photo opens the lightbox for the
-   specific event it came from, so the full set and details are still
-   one tap away. ---------- */
-function EventsBox({ items }) {
-  const pooled = items.flatMap((p) => {
-    const urls = (p.media_urls && p.media_urls.length ? p.media_urls : [p.media_url]).filter(Boolean);
-    return urls.map((url) => ({ url, project: p }));
-  });
-  const theme = useProjectTheme(pooled.map((item) => item.url));
-
-  return (
-    <div className="work-box work-box-content" style={{ "--theme-rgb": theme || "90, 90, 90" }}>
-      <div className="work-box-content-head">
-        <div className="work-box-eyebrow"><span>Event</span></div>
-        <h3 className="work-box-title">Events</h3>
-        <p className="work-box-desc">A collected wall of moments from recent events — tap any photo to open its full set.</p>
-      </div>
-      <div className="work-box-content-body">
-        {pooled.length === 0 ? (
-          <p className="work-empty">Nothing here yet — check back soon.</p>
-        ) : (
-          <div className="bento-grid">
-            {pooled.map((item, i) => <EventTile key={item.url + i} item={item} index={i} />)}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EventTile({ item, index }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <figure
-        className="bento-item"
-        style={{ animationDelay: `${index * 35}ms` }}
-        onClick={() => setOpen(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === "Enter") setOpen(true); }}
-      >
-        <MediaPreview url={item.url} title={item.project.title} />
-        <figcaption className="bento-caption">
-          <strong>{item.project.title}</strong>
-        </figcaption>
-      </figure>
-      {open && <ProjectLightbox project={item.project} onClose={() => setOpen(false)} />}
-    </>
-  );
-}
-
-/* ---------- An <img> that fades in once it's actually decoded, instead
-   of popping in abruptly — makes a still-loading image feel like it's
-   arriving smoothly rather than making you wait for a blank box. ---------- */
-function FadeImg({ src, alt, className }) {
-  const [loaded, setLoaded] = useState(false);
-  return (
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      decoding="async"
-      className={`${className || ""} fade-img${loaded ? " fade-img-in" : ""}`.trim()}
-      onLoad={() => setLoaded(true)}
-    />
-  );
-}
-
-/* ---------- Videos: one full-page box embedding the TikTok profile. ---------- */
-function VideoBox() {
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const existing = document.getElementById("tiktok-embed-script");
-    if (existing) {
-      if (window.tiktokEmbed?.lib?.render) window.tiktokEmbed.lib.render([ref.current]);
-      return;
-    }
-    const script = document.createElement("script");
-    script.id = "tiktok-embed-script";
-    script.src = "https://www.tiktok.com/embed.js";
-    script.async = true;
-    document.body.appendChild(script);
-  }, []);
-
-  return (
-    <div className="work-box work-box-content">
-      <div className="work-box-content-head">
-        <div className="work-box-eyebrow"><span>Video</span></div>
-        <h3 className="work-box-title">Short-form video</h3>
-        <p className="work-box-desc">Recent edits and clips — the full profile is embedded below.</p>
-      </div>
-      <div className="work-box-content-body">
-        <div className="tiktok-panel">
-          <div className="tiktok-embed-wrap" ref={ref}>
-            <blockquote
-              className="tiktok-embed"
-              cite={`https://www.tiktok.com/@${tiktokHandle}`}
-              data-unique-id={tiktokHandle}
-              data-embed-type="creator"
-              style={{ maxWidth: "780px", minWidth: "288px" }}
-            >
-              <section>
-                <a target="_blank" rel="noreferrer" href={`https://www.tiktok.com/@${tiktokHandle}?refer=creator_embed`}>
-                  @{tiktokHandle}
-                </a>
-              </section>
-            </blockquote>
-          </div>
-          <a
-            className="btn btn-ghost tiktok-fallback-link"
-            href={`https://www.tiktok.com/@${tiktokHandle}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            View full profile on TikTok →
-          </a>
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ const titles = ["Marketing Agent", "Full-Stack Web Developer", "Certified AI Eng
 
 export default function Hero() {
   return (
-    <section className="hero" id="top">
+    <section className="hero screen" id="top" data-screen="Home">
       <div className="container hero-inner">
         <span className="mark mark-lg" aria-hidden="true">
           <span></span><span></span><span></span>
