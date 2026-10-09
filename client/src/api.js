@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://myport-vnrv.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL || "https://myportfolio-suqv.onrender.com";
 
 export async function fetchProjects() {
   const res = await fetch(`${API_URL}/api/projects`);
