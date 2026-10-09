@@ -41,17 +41,17 @@ const icon = {
 };
 
 const services = [
-  { n: "01", icon: icon.marketing, title: "Marketing", body: "Campaign strategy, paid social, and funnels that turn attention into customers." },
-  { n: "02", icon: icon.dev, title: "Full-stack dev", body: "React, Node, and Supabase products, from prototype to production." },
-  { n: "03", icon: icon.ai, title: "AI engineering", body: "LLM-backed tools and agents built into real workflows." },
-  { n: "04", icon: icon.video, title: "Video editing", body: "Narrative cuts, color grading, and motion graphics." },
-  { n: "05", icon: icon.brand, title: "Graphic & brand design", body: "Identity systems, logotypes, and the guidelines that keep them consistent." },
-  { n: "06", icon: icon.event, title: "Event design", body: "Signage, run-of-show, and on-site experience." },
+  { n: "01", icon: icon.marketing, title: "Marketing" },
+  { n: "02", icon: icon.dev, title: "Full-stack dev" },
+  { n: "03", icon: icon.ai, title: "AI engineering" },
+  { n: "04", icon: icon.video, title: "Video editing" },
+  { n: "05", icon: icon.brand, title: "Graphic & brand design" },
+  { n: "06", icon: icon.event, title: "Event design" },
 ];
 
 export default function Services() {
   return (
-    <section className="section screen" id="services" data-screen="Services">
+    <section className="section screen services-screen" id="services" data-screen="Services">
       <div className="container">
         <div className="section-head section-head-center">
           <p className="mono-label" data-r="up">what i do</p>
@@ -59,17 +59,11 @@ export default function Services() {
         </div>
         <div className="discipline-grid">
           {services.map((d, i) => (
-            <div className="d-wrap" key={d.n} data-r={i % 2 ? "right" : "left"} style={{ "--i": i + 2 }}>
-            <div className="discipline">
-              <div className="discipline-top">
+            <div className="d-wrap" key={d.n} data-r="up" style={{ "--i": i + 2 }}>
+              <div className="discipline">
                 <span className="discipline-icon">{d.icon}</span>
-                <span className="discipline-index">{d.n}</span>
-              </div>
-              <div className="discipline-body">
                 <h3>{d.title}</h3>
-                <p>{d.body}</p>
               </div>
-            </div>
             </div>
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getMediaKind, getMediaLabel } from "../lib/media.js";
+import { getMediaKind, getMediaLabel, thumbUrl } from "../lib/media.js";
 import { getProjectTheme } from "../lib/color.js";
 
 const CATEGORY_LABEL = {
@@ -81,10 +81,10 @@ function DesignMarquee({ pool }) {
   const total = rows.reduce((n, r) => n + r.length * 2, 0);
   const [timedOut, setTimedOut] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setTimedOut(true), 4000);
+    const t = setTimeout(() => setTimedOut(true), 2000);
     return () => clearTimeout(t);
   }, []);
-  // Hold the animation until sizes are known (or 4s passes), otherwise
+  // Hold the animation until sizes are known (or 2s passes), otherwise
   // tiles growing as their images arrive would make the loop jump. Once
   // released it stays released.
   const [latched, setLatched] = useState(false);
@@ -162,6 +162,9 @@ const ROW_SPEEDS = [38, 30, 42, 34];
 
 function MarqueeTile({ item, onOpen, onSettle, focusable }) {
   const [state, setState] = useState("loading"); // loading | loaded | error
+  // Tiles use the small "-sm" version when one exists; if it is missing the
+  // tile quietly falls back to the full image.
+  const [src, setSrc] = useState(() => thumbUrl(item.url));
   const settle = (s) => { setState(s); onSettle(); };
 
   return (
@@ -173,12 +176,12 @@ function MarqueeTile({ item, onOpen, onSettle, focusable }) {
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}
     >
       <img
-        src={item.url}
+        src={src}
         alt={focusable ? item.project.title : ""}
         decoding="async"
         draggable="false"
         onLoad={() => settle("loaded")}
-        onError={() => settle("error")}
+        onError={() => (src !== item.url ? setSrc(item.url) : settle("error"))}
       />
       <figcaption className="bento-caption">
         <span className="bento-caption-cat">{CATEGORY_LABEL[item.project.category] || item.project.category}</span>
